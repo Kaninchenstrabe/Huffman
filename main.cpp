@@ -3,18 +3,54 @@
 
 
 class Node {
-    protected:
+    private:
         int value;
         char data;
-        Node* left;
-        Node* right;
+        Node* left=nullptr;
+        Node* right=nullptr;
+        Node* next=nullptr;
     public:
         Node(const int node_value, const char node_data){
             value = node_value;
             data = node_data;
-            left = nullptr;
-            right = nullptr;
         }
+        // set & get methods
+        bool setValue(int node_value) {
+                value = node_value;
+                return false;
+            }
+        int getValue() {
+                return value;
+            }
+        bool setData(int node_data) {
+                data = node_data;
+                return false;
+            }
+        char getData() {
+                return data;
+            }
+        bool setLeft(Node* node) {
+            left = node;
+            return false;
+            }
+        Node* getLeft() {
+            return left;
+            }
+        bool setRight(Node* node) {
+            left = node;
+            return false;
+            }
+        Node* getRight() {
+            return right;
+            }
+        bool setNext(Node* element) {
+                next = element;
+                return false;
+            }
+        Node* getNext() {
+                return next;
+            }
+        // other methods
         bool update_value() {
             if (left != nullptr && right != nullptr) {
                 value = left->value + right->value;
@@ -23,21 +59,6 @@ class Node {
                 return true;;
             }
         }
-        bool setValue(int node_value) {
-            value = node_value;
-            return false;
-        }
-        int getValue() {
-            return value;
-        }
-
-        bool setData(int node_data) {
-                data = node_data;
-                return false;
-            }
-        char getData() {
-                return data;
-            }
         bool adopt(Node* node, const char side) {
             switch (side) {
                 case 'L':
@@ -52,56 +73,42 @@ class Node {
                     return true;
             }
         }
-        Node* getLeft() {
-            return left;
-        }
-        Node* getRight() {
-            return right;
-        }
+        // destructor?
 };
-class Element {
-    protected:
-        Node el_node = Node(0,' ');
-        Element* next = nullptr;
-    public:
-         bool setNext(Element* element) {
-            next = element;
-            return false;
-        }
-        Element* getNext() {
-            return next;
-        }
-        bool setValue(int el_value) {
-            el_node.setValue(el_value);
-             return false;
-        }
-        int getValue() {
-            return el_node.getValue();
-        }
-        bool setData(char Data) {
-             el_node.setData(Data);
-             return false;
-         }
-        char getData() {
-             return el_node.getData();
-         }
-        Node* getAddress() {
-             return &el_node;
-         }
-        bool setNode(Node* node) {
-             el_node=*node;
-             return false;
-         }
 
-};
 class List {
-    protected:
-        Element* last=nullptr;
-        Element* first=nullptr;
-        Element* helping_hand=nullptr;
+    private:
+        Node* last=nullptr;
+        Node* first=nullptr;
+        Node* helping_hand=nullptr;
     public:
-
-        bool insert(Element* element) {
+        // set & get methods
+        bool setFirst(Node* element) {
+            first = element;
+            return false;
+            }
+        Node* getFirst() {
+            return first;
+            }
+        Node* getLast() {
+            return last;
+            }
+        int getValue(int index) {
+                helping_hand=first;
+                for (int i=0;i<index;i++) {
+                    helping_hand=helping_hand->getNext();
+                }
+                return helping_hand->getValue();
+                }
+        char getData(int index) {
+                helping_hand=first;
+                for (int i=0;i<index;i++) {
+                    helping_hand=helping_hand->getNext();
+                }
+                return helping_hand->getData();
+                }
+        // other
+        bool insert(Node* element) {
             if (first != nullptr) {
                 element->setNext(first->getNext());
             }
@@ -111,7 +118,7 @@ class List {
             }
             return false;
         }
-        bool append(Element* element) {
+        bool append(Node* element) {
             if (element == nullptr) return true;
             element->setNext(nullptr);
             if (first == nullptr) {
@@ -123,44 +130,9 @@ class List {
             }
             return false;
         }
-        int getValue(int index) {
-            helping_hand=first;
-            for (int i=0;i<index;i++) {
-                helping_hand=helping_hand->getNext();
-            }
-            return helping_hand->getValue();
-        }
-        char getData(int index) {
-            helping_hand=first;
-            for (int i=0;i<index;i++) {
-                helping_hand=helping_hand->getNext();
-            }
-            return helping_hand->getData();
-        }
-        Element* getAddress(int index) {
-            helping_hand=first;
-            for (int i=0;i<index;i++) {
-                helping_hand=helping_hand->getNext();
-            }
-            return helping_hand;
-        }
-        Element* getFirst() {
-            return first;
-        }
-        bool setFirst(Element* element) {
-            first = element;
-            return false;
-        }
-        Element* getLast() {
-            return last;
-        }
         void clear() {
             first = nullptr;
             last = nullptr;
-        }
-        void setBounds(Element* newFirst, Element* newLast) {
-            first = newFirst;
-            last = newLast;
         }
         void concat(List& other) {
             if (other.first == nullptr) return;
@@ -175,6 +147,7 @@ class List {
             }
 
         }
+        // destructor?
         int length() {
             helping_hand=first;
             int len=0;
@@ -187,9 +160,10 @@ class List {
             }
             return len;
         }
+        // OLD but ill probably need them later
         bool load_list(int* values, char* data) {
             for (int i=0; i<length(); i++) {
-                auto* element = new Element();
+                auto* element = new Node(0,' ');
                 element->setValue(*(values+i));
                 element->setData(*(data+i));
                 if (i == 0) {
@@ -207,18 +181,17 @@ class List {
             }
             return false;
         }
-
 };
 
 class Huffman {
     private:
         List tree;
-
+        // if huffman class will remain with only one variable and just a set of methods consider moving the methods to list
     public:
         bool load_list(int* values, char* data, int len) {
 
             for (int i=0; i<len; i++) {
-                auto* element = new Element();
+                auto* element = new Node(0,' ');
                 element->setValue(*(values+i));
                 element->setData(*(data+i));
                 if (i == 0) {
@@ -244,11 +217,9 @@ class Huffman {
             for (int i=0; i<5; i++) {
                 List L_base;
                 List R_base;
-                Element* helping_hand = tree.getFirst();
-                //i = i << 1;
+                Node* helping_hand = tree.getFirst();
                 while (helping_hand != nullptr) {
-                    Element* nextNode = helping_hand->getNext();
-
+                    Node* nextNode = helping_hand->getNext();
                     if (((helping_hand->getValue() >> i)&1)==0) {
                         L_base.append(helping_hand);
                     } else {
@@ -263,14 +234,12 @@ class Huffman {
             return 0;
         }
         bool generate() {
-            //int i=0;
             int len = tree.length();
             for (int i=0; i<len-1; i++) {
                 radix();
-                auto element = new Element;
-                Node *helper = element->getAddress();
-                helper->adopt(tree.getFirst()->getAddress(), 'L');
-                helper->adopt(tree.getFirst()->getNext()->getAddress(), 'R');
+                auto element = new Node(0,' ');
+                element->adopt(tree.getFirst(), 'L');
+                element->adopt(tree.getFirst()->getNext(), 'R');
                 element->setNext(tree.getFirst()->getNext()->getNext());
                 tree.setFirst(element);
             }
@@ -281,34 +250,27 @@ class Huffman {
             for(bits = 0; var != 0; ++bits) var >>= 1;
             return bits;
         }
+        // WIP
         char read(int directions) {
-            Element* reader = tree.getFirst();
+            Node* reader = tree.getFirst();
             int order = 0;
-
             for (int i=bitlength(directions); i>0; i--) {
                 order = ((directions&((directions>>(i-1))<<2))>>2)%2;
                 std::cout<<order<<std::endl;;
                 //directions = directions >> 1;
                     if (order == 1){
-                        reader->setNode(reader->getAddress()->getRight());
+                        reader=reader->getRight();
                     } else if (order == 0){
-                        reader->setNode(reader->getAddress()->getLeft());
+                        reader=reader->getLeft();
                     }
             }
-            return reader->getAddress()->getData();
+            return reader->getData();
         }
-
-
-
 };
 using namespace std;
 
-int bitlength(int num) {
-    unsigned bits, var = (num < 0) ? -num : num;
-    for(bits = 0; var != 0; ++bits) var >>= 1;
-    return bits;
-}
 int main() {
+    //CLEAN TS UP
     int list[] = {7, 2, 5, 1, 4, 3, 1, 6, 8};
     char data[] = {'a','b','c','d','e','f','g','h','i'};
     Huffman algo;
@@ -325,6 +287,6 @@ int main() {
     algo.generate();
     std::cout << "done" << std::endl;
     algo.print_list();
-    std::cout << algo.read(63);
+    std::cout << algo.read(5);
     return 0;
 }
