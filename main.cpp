@@ -1,13 +1,13 @@
-#include <cmath>
+#include <cstdint>
 #include <iostream>
-
+#include <fstream>
 
 class Node {
     private:
         int value;
         char data;
-        Node* left=nullptr;
-        Node* right=nullptr;
+        Node* left = nullptr;
+        Node* right = nullptr;
         Node* next=nullptr;
     public:
         Node(const int node_value, const char node_data){
@@ -15,30 +15,14 @@ class Node {
             data = node_data;
         }
         // set & get methods
-        bool setValue(int node_value) {
-                value = node_value;
-                return false;
-            }
         int getValue() {
                 return value;
-            }
-        bool setData(int node_data) {
-                data = node_data;
-                return false;
             }
         char getData() {
                 return data;
             }
-        bool setLeft(Node* node) {
-            left = node;
-            return false;
-            }
         Node* getLeft() {
             return left;
-            }
-        bool setRight(Node* node) {
-            left = node;
-            return false;
             }
         Node* getRight() {
             return right;
@@ -56,7 +40,7 @@ class Node {
                 value = left->value + right->value;
                 return false;
             } else {
-                return true;;
+                return true;
             }
         }
         bool adopt(Node* node, const char side) {
@@ -73,14 +57,16 @@ class Node {
                     return true;
             }
         }
-        // destructor?
+        ~Node() {
+                delete left;
+                delete right;
+            }
 };
 
 class List {
     private:
         Node* last=nullptr;
         Node* first=nullptr;
-        Node* helping_hand=nullptr;
     public:
         // set & get methods
         bool setFirst(Node* element) {
@@ -88,36 +74,24 @@ class List {
             return false;
             }
         Node* getFirst() {
-            return first;
-            }
-        Node* getLast() {
-            return last;
+            if (first!=nullptr) {
+                return first;
+                }
             }
         int getValue(int index) {
-                helping_hand=first;
+                Node* helping_hand=first;
                 for (int i=0;i<index;i++) {
                     helping_hand=helping_hand->getNext();
                 }
                 return helping_hand->getValue();
                 }
         char getData(int index) {
-                helping_hand=first;
+                Node* helping_hand=first;
                 for (int i=0;i<index;i++) {
                     helping_hand=helping_hand->getNext();
                 }
                 return helping_hand->getData();
                 }
-        // other
-        bool insert(Node* element) {
-            if (first != nullptr) {
-                element->setNext(first->getNext());
-            }
-            first = element;
-            if (last == nullptr) {
-                last = element;
-            }
-            return false;
-        }
         bool append(Node* element) {
             if (element == nullptr) return true;
             element->setNext(nullptr);
@@ -147,9 +121,8 @@ class List {
             }
 
         }
-        // destructor?
         int length() {
-            helping_hand=first;
+            Node* helping_hand=first;
             int len=0;
             if (first!=nullptr && last!=nullptr) {
                 len++;
@@ -160,83 +133,91 @@ class List {
             }
             return len;
         }
-        // OLD but ill probably need them later
-        bool load_list(int* values, char* data) {
-            for (int i=0; i<length(); i++) {
-                auto* element = new Node(0,' ');
-                element->setValue(*(values+i));
-                element->setData(*(data+i));
-                if (i == 0) {
-                    insert(element);
-                } else if (i>0) {
-                    append(element);
+        bool load_file(int* values, int len) {
+            for (int i = 0; i<len; i++) {
+                if (*(values+i)>0) {
+                    append(new Node(*(values+i),static_cast<char>(i)));
                 }
-
             }
             return false;
         }
         bool print_list() {
-            for (int i=0; i<length(); i++) {
-                std::cout << getData(i) << std::endl;
+                for (int i=0; i<length(); i++) {
+                    std::cout << i;
+                    std::cout << ". ";
+                    std::cout << getData(i);
+                    std::cout << ", ";
+                    std::cout << getValue(i) << std::endl;
+                }
+                return false;
             }
-            return false;
-        }
+        int radix() {
+                for (int i=0; i<16; i++) {
+                    List L_base;
+                    List R_base;
+                    Node* helping_hand = getFirst();
+                    while (helping_hand != nullptr) {
+                        Node* nextNode = helping_hand->getNext();
+                        if (((helping_hand->getValue() >> i)&1)==0) {
+                            L_base.append(helping_hand);
+                        } else {
+                            R_base.append(helping_hand);
+                        }
+                        helping_hand=nextNode;
+                    }
+                    clear();
+                    concat(L_base);
+                    concat(R_base);
+                }
+                return 0;
+            }
 };
-
-class Huffman {
+struct HuffCode {
+    uint32_t bits = 0;
+    uint8_t length =0;
+};
+class H_tree {
     private:
         List tree;
-        // if huffman class will remain with only one variable and just a set of methods consider moving the methods to list
-    public:
-        bool load_list(int* values, char* data, int len) {
-
-            for (int i=0; i<len; i++) {
-                auto* element = new Node(0,' ');
-                element->setValue(*(values+i));
-                element->setData(*(data+i));
-                if (i == 0) {
-                    tree.insert(element);
-                } else if (i>0) {
-                    tree.append(element);
-                }
-
-            }
-            return false;
+        int len;
+        HuffCode codebook[256];
+        void DFS(Node* root, uint32_t bits, uint8_t depth) {
+        if (root == nullptr) return;
+        if (root->getLeft() == nullptr && root ->getRight () == nullptr) {
+            if (depth == 0) depth = 1;
+            codebook[(unsigned char)root->getData()] = {bits, depth};
         }
+
+        DFS(root->getLeft(), (bits << 1) | 0, depth+1);
+        DFS(root->getRight(), (bits << 1) | 1, depth+1);
+    }
+public:
+        bool load_file(std::string filename) {
+            std::ifstream File;
+            File.open(filename);
+            std::string tekst;
+            int occurences[256];
+            for (int i=0; i<256; i++){
+                occurences[i]=0;
+            }
+            char field;
+            while (getline(File, tekst)) {
+                for (int i=0; i<tekst.length(); i++) {
+                    occurences[static_cast<unsigned char>(tekst[i])]+=1;
+                }
+            }
+            File.close();
+            tree.load_file(&occurences[0], sizeof(occurences)/sizeof(occurences[0]));
+            this->len = tree.length();
+            return false;
+            } // Load a file into a linked list
         bool print_list() {
-            for (int i=0; i<tree.length(); i++) {
-                std::cout << i;
-                std::cout << ". ";
-                std::cout << tree.getData(i);
-                std::cout << ", ";
-                std::cout << tree.getValue(i) << std::endl;
-            }
+            tree.print_list();
             return false;
         }
-        int radix() {
-            for (int i=0; i<5; i++) {
-                List L_base;
-                List R_base;
-                Node* helping_hand = tree.getFirst();
-                while (helping_hand != nullptr) {
-                    Node* nextNode = helping_hand->getNext();
-                    if (((helping_hand->getValue() >> i)&1)==0) {
-                        L_base.append(helping_hand);
-                    } else {
-                        R_base.append(helping_hand);
-                    }
-                    helping_hand=nextNode;
-                }
-                tree.clear();
-                tree.concat(L_base);
-                tree.concat(R_base);
-            }
-            return 0;
-        }
-        bool generate() {
-            int len = tree.length();
+        bool Huffmanize() {
             for (int i=0; i<len-1; i++) {
-                radix();
+                tree.radix();
                 auto element = new Node(0,' ');
                 element->adopt(tree.getFirst(), 'L');
                 element->adopt(tree.getFirst()->getNext(), 'R');
@@ -244,49 +225,76 @@ class Huffman {
                 tree.setFirst(element);
             }
             return false;
-        }
-        int bitlength(int num) {
-            unsigned bits, var = (num < 0) ? -num : num;
-            for(bits = 0; var != 0; ++bits) var >>= 1;
-            return bits;
-        }
-        // WIP
-        char read(int directions) {
-            Node* reader = tree.getFirst();
-            int order = 0;
-            for (int i=bitlength(directions); i>0; i--) {
-                order = ((directions&((directions>>(i-1))<<2))>>2)%2;
-                std::cout<<order<<std::endl;;
-                //directions = directions >> 1;
-                    if (order == 1){
-                        reader=reader->getRight();
-                    } else if (order == 0){
-                        reader=reader->getLeft();
+        } // Turn a linked list into a Huffman (weighted) tree
+        void dictionarize() {
+                for (auto & i : codebook) {
+                    i = {.bits = 0,.length = 0};
+                }
+                DFS(tree.getFirst(),0,0);
+            } // Create a dictionary character -> Huffman code
+        void print_dictionary() {
+            for (int i=0; i<256; i++) {
+                if (codebook[i].length>0) {
+                    std::cout << static_cast<char>(i) << "->";
+                    for (int b = codebook[i].length -1; b>=0; b--) {
+                        std::cout << ((codebook[i].bits >> b) & 1);
                     }
+                    std::cout << std::endl;
+                }
             }
-            return reader->getData();
+        }
+        int encode(const char* input, int input_len, char* out_bits) {
+                int out_pos = 0;
+                for (int i = 0; i < input_len; i++) {
+                    HuffCode code = codebook[static_cast<unsigned char>(input[i])];
+                    for (int b = code.length - 1; b >= 0; b--) {
+                        out_bits[out_pos++] = ((code.bits >> b) & 1) ? '1' : '0';
+                    }
+                }
+                out_bits[out_pos] = '\0';
+                return out_pos;
+            }
+        char* decode(char* bitstream) {
+            char* i = bitstream;
+            int n = 0 ;
+            Node* helper = tree.getFirst();
+            if (helper == nullptr) return bitstream;
+
+            while (*i != '\0') {
+                if (*i == '0') {
+                    helper = helper->getLeft();
+                } else if (*i == '1') {
+                    helper = helper->getRight();
+                }
+                if (helper != nullptr && helper->getLeft() == nullptr && helper->getRight() == nullptr) {
+                    bitstream[n++] = helper->getData();
+                    helper = tree.getFirst();
+                }
+                i++;
+            }
+            bitstream[n] = '\0'; // Terminate the decoded string so leftover bits aren't printed
+            return bitstream;
+        }
+        bool prepare(std::string filename) {
+            load_file(filename);
+            Huffmanize();
+            dictionarize();
+            return false;
         }
 };
-using namespace std;
 
 int main() {
-    //CLEAN TS UP
-    int list[] = {7, 2, 5, 1, 4, 3, 1, 6, 8};
-    char data[] = {'a','b','c','d','e','f','g','h','i'};
-    Huffman algo;
-    std::cout << "done" << std::endl;
-    std::cout << "done" << std::endl;
-    algo.load_list(&list[0], &data[0], min(sizeof(list)/sizeof(list[0]), sizeof(data)/sizeof(data[0])));
-    std::cout << "done" << std::endl;
-    algo.print_list();
-    std::cout << "done" << std::endl;
-    //algo.radix();
-    //std::cout << "done" << std::endl;
-    //algo.print_list();
-    std::cout << "done" << std::endl;
-    algo.generate();
-    std::cout << "done" << std::endl;
-    algo.print_list();
-    std::cout << algo.read(5);
+    H_tree algo;
+    algo.prepare("script.txt");
+    char text[] = "the queen bee is the queenest of all the queer little fuckers - bees\0";
+    char encoded[256];
+    std::cout << "Input text: " << text << std::endl;
+    int total_bits = algo.encode(text, sizeof(text)/sizeof(text[0]), encoded);
+    std::cout << "Compressed text to " << total_bits << " bits: \n"<< encoded <<  std::endl;
+    std::cout << "Doing so allowed to save " << 8*sizeof(text)-total_bits << " bits (" <<
+        100*(1 - static_cast<float>(total_bits) / (8 * static_cast<float>(sizeof(text)))) <<
+            "% less)\nDecoding encoded bits...\nResults: ";
+
+    std::cout << algo.decode(&encoded[0]);
     return 0;
 }
