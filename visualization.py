@@ -1,429 +1,427 @@
-
 from manim import *
+import numpy as np
 
 # --------------------------------------------------
-# Kodowanie Huffmana – animacja na podstawie slajdów
-# Manim Community Edition
+# Kodowanie Huffmana – płynna animacja budowy drzewa
+# Manim Community Edition v0.22.1
 # --------------------------------------------------
+
 
 class HuffmanAnimation(Scene):
+    TIME_SCALE = 2.0  # 2.0 = twice as long (half speed)
+
+    def play(self, *args, **kwargs):
+        kwargs["run_time"] = kwargs.get("run_time", 1.0) * self.TIME_SCALE
+        return super().play(*args, **kwargs)
+
+    def wait(self, duration=1.0, *args, **kwargs):
+        return super().wait(duration * self.TIME_SCALE, *args, **kwargs)
 
     def construct(self):
-
         self.camera.background_color = BLACK
 
-        WHITE_COLOR = WHITE
+        NODE_RADIUS = 0.46
+        FILL_BLUE = "#0D2B52"
+        BORDER_BLUE = BLUE_B
+        EDGE_COLOR = BLUE_A
 
-        # Funkcja tworząca pojedynczy węzeł-symbol
-        def symbol_node(symbol, frequency, radius=0.43):
+        # Tworzy niebieski węzeł o stałym promieniu:
+        # - w środku wyłącznie symbole (automatycznie ułożone i przeskalowane)
+        # - pod kołem liczba wystąpień
+        def create_node(symbols, freq, pos=ORIGIN):
             circle = Circle(
-                radius=radius,
-                color=WHITE_COLOR,
-                stroke_width=2
+                radius=NODE_RADIUS,
+                fill_color=FILL_BLUE,
+                fill_opacity=1.0,
+                stroke_color=BORDER_BLUE,
+                stroke_width=3.0,
             )
+            circle.move_to(pos)
+            circle.set_z_index(2)
 
-            arrow = Text(
-                symbol,
-                font_size=35,
-                color=WHITE_COLOR
-            )
-            arrow.move_to(circle.get_center())
-
-            number = Text(
-                str(frequency),
-                font_size=27,
-                color=WHITE_COLOR
-            )
-            number.next_to(circle, DOWN, buff=0.12)
-
-            return VGroup(circle, arrow, number)
-
-        # Funkcja tworząca węzeł drzewa
-        def tree_node(value, position, leaf=False):
-            if leaf:
-                shape = Rectangle(
-                    width=1.05,
-                    height=0.85,
-                    color=WHITE,
-                    stroke_width=2
-                )
+            n = len(symbols)
+            sym_list = []
+            if n == 1:
+                t = Text(symbols[0], font_size=32, color=WHITE, weight=BOLD)
+                sym_list.append(t)
+                sym_group = t
+            elif n == 2:
+                sym_list = [
+                    Text(s, font_size=26, color=WHITE, weight=BOLD) for s in symbols
+                ]
+                sym_group = VGroup(*sym_list).arrange(RIGHT, buff=0.10)
+            elif n == 3:
+                s0 = Text(symbols[0], font_size=22, color=WHITE, weight=BOLD)
+                s1 = Text(symbols[1], font_size=22, color=WHITE, weight=BOLD)
+                s2 = Text(symbols[2], font_size=22, color=WHITE, weight=BOLD)
+                sym_list = [s0, s1, s2]
+                top_row = VGroup(s0, s1).arrange(RIGHT, buff=0.08)
+                sym_group = VGroup(top_row, s2).arrange(DOWN, buff=0.04)
             else:
-                shape = Circle(
-                    radius=0.38,
-                    color=WHITE,
-                    stroke_width=2
-                )
+                rows = []
+                for i in range(0, n, 2):
+                    row_syms = [
+                        Text(s, font_size=20, color=WHITE, weight=BOLD)
+                        for s in symbols[i : i + 2]
+                    ]
+                    sym_list.extend(row_syms)
+                    rows.append(VGroup(*row_syms).arrange(RIGHT, buff=0.08))
+                sym_group = VGroup(*rows).arrange(DOWN, buff=0.04)
 
-            shape.move_to(position)
+            max_inner = NODE_RADIUS * 1.25
+            if sym_group.width > max_inner:
+                sym_group.scale(max_inner / sym_group.width)
+            if sym_group.height > max_inner:
+                sym_group.scale(max_inner / sym_group.height)
 
-            label = Text(
-                str(value),
-                font_size=25,
-                color=WHITE
-            )
-            label.move_to(shape.get_center())
+            sym_group.move_to(circle.get_center())
+            sym_group.set_z_index(3)
 
-            return VGroup(shape, label)
+            freq_text = Text(str(freq), font_size=23, color=BLUE_A, weight=BOLD)
+            freq_text.set_stroke(color=BLACK, width=4, background=True)
+            freq_text.next_to(circle, DOWN, buff=0.08)
+            freq_text.set_z_index(3)
 
-        # Funkcja rysująca połączenie węzłów
-        def connection(start, end, label=None, label_pos=None):
-            line = Line(
-                start,
-                end,
-                color=WHITE,
-                stroke_width=2
-            )
+            node_group = VGroup(circle, sym_group, freq_text)
+            return node_group, circle, sym_group, sym_list, freq_text
 
-            result = VGroup(line)
+        # Tworzy skośną krawędź łączącą dokładnie brzegi dwóch okręgów
+        def create_edge(parent_circle, child_circle):
+            p1 = parent_circle.get_center()
+            p2 = child_circle.get_center()
+            vec = p2 - p1
+            unit = vec / np.linalg.norm(vec)
+            start = p1 + unit * NODE_RADIUS
+            end = p2 - unit * NODE_RADIUS
+            edge = Line(start, end, color=EDGE_COLOR, stroke_width=2.5)
+            edge.set_z_index(0)
+            return edge
 
-            if label:
-                txt = Text(
-                    label,
-                    font_size=20,
-                    color=WHITE
-                )
-                txt.move_to(label_pos)
-                result.add(txt)
+        # Zbiera wszystkie obiekty (węzły i krawędzie) należące do poddrzewa
+        def collect_subtree_mobjects(tree):
+            mobs = [tree["node"]]
+            if tree["left_edge"] is not None:
+                mobs.append(tree["left_edge"])
+            if tree["right_edge"] is not None:
+                mobs.append(tree["right_edge"])
+            if tree["left"] is not None:
+                mobs.extend(collect_subtree_mobjects(tree["left"]))
+            if tree["right"] is not None:
+                mobs.extend(collect_subtree_mobjects(tree["right"]))
+            return mobs
 
-            return result
+        # Zwraca listę animacji przesuwających całe poddrzewo tak,
+        # aby środek jego korzenia znalazł się w target_center
+        def move_subtree_anims(tree, target_center, path_arc=0.0):
+            delta = target_center - tree["circle"].get_center()
+            if np.linalg.norm(delta) < 1e-4:
+                return []
+            mobs = collect_subtree_mobjects(tree)
+            return [m.animate(path_arc=path_arc).shift(delta) for m in mobs]
 
         # ==========================================
-        # ETAP 1 – Początkowy ciąg symboli
+        # ETAP 1 – Początkowa sekwencja znaków
         # ==========================================
+        arrows = ["↑", "↑", "←", "↓", "↓", "←", "↑", "→", "↓", "↑", "→", "↑"]
 
-        arrows = ["↑", "↑", "←", "↓", "↓",
-                  "←", "↑", "→", "↓", "↑",
-                  "→", "↑"]
-
-        sequence = VGroup()
-
-        for i, symbol in enumerate(arrows):
-            arrow = Text(symbol, font_size=45, color=WHITE)
-            arrow.move_to(
-                LEFT * 5.2 + RIGHT * i * 0.95
-            )
-            sequence.add(arrow)
+        seq_mobs = VGroup()
+        for i, sym in enumerate(arrows):
+            t = Text(sym, font_size=44, color=WHITE, weight=BOLD)
+            t.move_to(LEFT * 5.5 + RIGHT * i * 1.0 + UP * 0.6)
+            seq_mobs.add(t)
 
         self.play(
             LaggedStart(
-                *[FadeIn(x) for x in sequence],
-                lag_ratio=0.12
+                *[FadeIn(m, scale=0.82, rate_func=smooth) for m in seq_mobs],
+                lag_ratio=0.22,
             ),
-            run_time=3
+            run_time=3.2,
         )
-        self.wait(1)
-
-        self.play(FadeOut(sequence))
+        self.wait(0.8)
 
         # ==========================================
-        # ETAP 2 – Częstotliwości symboli
+        # ETAP 2 – Gładkie przejście do posortowanej sekwencji
+        # ==========================================
+        symbol_order = ["↑", "←", "↓", "→"]
+        grouped_indices = {s: [] for s in symbol_order}
+        for idx, sym in enumerate(arrows):
+            grouped_indices[sym].append(idx)
+
+        sorted_order_indices = []
+        for sym in symbol_order:
+            sorted_order_indices.extend(grouped_indices[sym])
+
+        sort_anims = []
+        for target_slot, orig_idx in enumerate(sorted_order_indices):
+            target_pos = LEFT * 5.5 + RIGHT * target_slot * 1.0 + UP * 1.6
+            arc = 0.25 if target_slot % 2 == 0 else -0.25
+            sort_anims.append(seq_mobs[orig_idx].animate(path_arc=arc).move_to(target_pos))
+
+        self.play(*sort_anims, run_time=1.8)
+        self.wait(0.7)
+
+        # ==========================================
+        # ETAP 3 – Zebranie tych samych znaków do węzłów
+        # ==========================================
+        node_x_positions = [-4.2, -1.4, 1.4, 4.2]
+        TOP_Y = 2.4
+
+        forest = []
+        merge_anims = []
+
+        for i, sym in enumerate(symbol_order):
+            indices = grouped_indices[sym]
+            freq = len(indices)
+            pos = np.array([node_x_positions[i], TOP_Y, 0.0])
+
+            node_group, circle, sym_group, _, freq_text = create_node(
+                [sym], freq, pos=pos
+            )
+            cluster = VGroup(*[seq_mobs[idx] for idx in indices])
+
+            merge_anims.append(GrowFromCenter(circle))
+            merge_anims.append(ReplacementTransform(cluster, sym_group))
+            merge_anims.append(FadeIn(freq_text, shift=UP * 0.15))
+
+            forest.append(
+                {
+                    "symbols": [sym],
+                    "freq": freq,
+                    "node": node_group,
+                    "circle": circle,
+                    "left": None,
+                    "right": None,
+                    "left_edge": None,
+                    "right_edge": None,
+                }
+            )
+
+        self.play(*merge_anims, run_time=1.6)
+        self.wait(0.9)
+
+        # ==========================================
+        # ETAPY 4 i 5 – Naprzemienne sortowanie i łączenie
+        # dwóch najmniejszych węzłów aż do pełnego drzewa
         # ==========================================
 
-        symbols = ["↑", "←", "↓", "→"]
-        frequencies = [5, 2, 3, 2]
-
-        nodes = VGroup()
-
-        positions = [
-            LEFT * 4.5,
-            LEFT * 1.5,
-            RIGHT * 1.5,
-            RIGHT * 4.5
+        merge_layouts = [
+            # Iteracja 1: połączenie ← (2) oraz → (2) -> ←→ (4)
+            {
+                "left_target": np.array([-3.9, 0.85, 0.0]),
+                "right_target": np.array([-1.7, 0.85, 0.0]),
+                "parent_pos": np.array([-2.8, 2.4, 0.0]),
+                "rest_targets": [
+                    np.array([0.9, 2.4, 0.0]),
+                    np.array([3.7, 2.4, 0.0]),
+                ],
+            },
+            # Iteracja 2: połączenie ↓ (3) oraz ←→ (4) -> ↓←→ (7)
+            {
+                "left_target": np.array([-3.5, 0.85, 0.0]),
+                "right_target": np.array([-0.5, 0.85, 0.0]),
+                "parent_pos": np.array([-2.0, 2.4, 0.0]),
+                "rest_targets": [
+                    np.array([3.2, 2.4, 0.0]),
+                ],
+            },
+            # Iteracja 3: połączenie ↑ (5) oraz ↓←→ (7) -> ↑↓←→ (12)
+            {
+                "left_target": np.array([-4.4, 1.15, 0.0]),
+                "right_target": np.array([-0.4, 1.15, 0.0]),
+                "parent_pos": np.array([-2.4, 2.65, 0.0]),
+                "rest_targets": [],
+            },
         ]
 
-        for symbol, freq, pos in zip(
-            symbols, frequencies, positions
-        ):
-            node = symbol_node(symbol, freq)
-            node.move_to(pos)
-            nodes.add(node)
-
-        self.play(
-            LaggedStart(
-                *[Create(n[0]) for n in nodes],
-                *[FadeIn(n[1:]) for n in nodes],
-                lag_ratio=0.3
-            ),
-            run_time=3
-        )
-
-        self.wait(2)
-
-        # ==========================================
-        # ETAP 3 – Sortowanie częstotliwości
-        # ==========================================
-
-        sorted_symbols = [
-            ("←", 2),
-            ("→", 2),
-            ("↓", 3),
-            ("↑", 5)
+        sort_x_layouts = [
+            [-4.2, -1.4, 1.4, 4.2],   # 4 poddrzewa
+            [-4.2, -1.1, 2.8],         # 3 poddrzewa
+            [-4.1, -0.1],              # 2 poddrzewa
         ]
 
-        sorted_nodes = VGroup()
+        for step_idx in range(3):
+            # --- KROK 4: Sortowanie węzłów rosnąco po liczbie wystąpień ---
+            forest.sort(key=lambda item: item["freq"])
+            xs = sort_x_layouts[step_idx]
 
-        for i, (symbol, freq) in enumerate(sorted_symbols):
-            node = symbol_node(symbol, freq)
-            node.move_to(positions[i])
-            sorted_nodes.add(node)
+            step4_anims = []
+            for idx, tree in enumerate(forest):
+                target = np.array([xs[idx], TOP_Y, 0.0])
+                arc = 0.25 if idx % 2 == 0 else -0.25
+                step4_anims.extend(move_subtree_anims(tree, target, path_arc=arc))
 
-        self.play(
-            Transform(nodes, sorted_nodes),
-            run_time=2
-        )
+            if step4_anims:
+                self.play(*step4_anims, run_time=1.4)
+                self.wait(0.6)
 
-        self.wait(1)
+            # --- KROK 5: Opuszczenie 2 pierwszych węzłów i utworzenie rodzica ---
+            layout = merge_layouts[step_idx]
+            left_tree = forest[0]
+            right_tree = forest[1]
+            remaining_trees = forest[2:]
 
-        # ==========================================
-        # ETAP 4 – Połączenie dwóch najmniejszych
-        # 2 + 2 = 4
-        # ==========================================
+            drop_anims = []
+            drop_anims.extend(move_subtree_anims(left_tree, layout["left_target"]))
+            drop_anims.extend(move_subtree_anims(right_tree, layout["right_target"]))
+            for r_tree, r_target in zip(remaining_trees, layout["rest_targets"]):
+                drop_anims.extend(move_subtree_anims(r_tree, r_target))
 
-        self.play(FadeOut(nodes))
+            self.play(*drop_anims, run_time=1.3)
 
-        left_leaf = symbol_node("←", 2, 0.30)
-        right_leaf = symbol_node("→", 2, 0.30)
+            parent_symbols = left_tree["symbols"] + right_tree["symbols"]
+            parent_freq = left_tree["freq"] + right_tree["freq"]
+            parent_pos = layout["parent_pos"]
 
-        left_leaf.move_to(LEFT * 2 + DOWN * 1.4)
-        right_leaf.move_to(RIGHT * 2 + DOWN * 1.4)
-
-        parent = symbol_node("← →", 4, 0.65)
-        parent.move_to(DOWN * 0.1)
-
-        branches = VGroup(
-            Line(
-                parent.get_bottom(),
-                left_leaf.get_top(),
-                color=WHITE
-            ),
-            Line(
-                parent.get_bottom(),
-                right_leaf.get_top(),
-                color=WHITE
+            parent_node, parent_circle, _, parent_sym_list, parent_freq_txt = create_node(
+                parent_symbols, parent_freq, pos=parent_pos
             )
-        )
+            left_edge = create_edge(parent_circle, left_tree["circle"])
+            right_edge = create_edge(parent_circle, right_tree["circle"])
 
-        self.play(
-            FadeIn(parent),
-            FadeIn(left_leaf),
-            FadeIn(right_leaf),
-            run_time=2
-        )
-
-        self.play(Create(branches))
-        self.wait(2)
-
-        # ==========================================
-        # ETAP 5 – Połączenie 3 + 4 = 7
-        # ==========================================
-
-        self.play(
-            FadeOut(left_leaf),
-            FadeOut(right_leaf),
-            FadeOut(branches)
-        )
-
-        parent7 = symbol_node("↓ ← →", 7, 0.7)
-        parent7.move_to(DOWN * 0.1)
-
-        down3 = symbol_node("↓", 3, 0.35)
-        down3.move_to(LEFT * 2 + DOWN * 1.5)
-
-        self.play(
-            Transform(parent, parent7),
-            FadeIn(down3),
-            run_time=2
-        )
-
-        branch3 = Line(
-            parent.get_bottom(),
-            down3.get_top(),
-            color=WHITE
-        )
-
-        self.play(Create(branch3))
-        self.wait(2)
-
-        # ==========================================
-        # ETAP 6 – Połączenie 5 + 7 = 12
-        # ==========================================
-
-        self.play(
-            FadeOut(parent),
-            FadeOut(down3),
-            FadeOut(branch3)
-        )
-
-        node5 = symbol_node("↑", 5, 0.45)
-        node7 = symbol_node("↓ ← →", 7, 0.6)
-
-        node5.move_to(LEFT * 2)
-        node7.move_to(RIGHT * 2)
-
-        root12 = symbol_node("↑ ↓ ← →", 12, 0.8)
-        root12.move_to(UP * 1.7)
-
-        self.play(
-            FadeIn(node5),
-            FadeIn(node7),
-            FadeIn(root12),
-            run_time=2
-        )
-
-        root_branches = VGroup(
-            Line(root12.get_bottom(), node5.get_top()),
-            Line(root12.get_bottom(), node7.get_top())
-        )
-
-        self.play(Create(root_branches))
-        self.wait(2)
-
-        # ==========================================
-        # ETAP 7 – Finalne drzewo Huffmana
-        # ==========================================
-
-        self.play(
-            FadeOut(node5),
-            FadeOut(node7),
-            FadeOut(root12),
-            FadeOut(root_branches)
-        )
-
-        # Pozycje węzłów
-        p12 = UP * 2.8
-
-        p5 = LEFT * 2.1 + UP * 1.2
-        p7 = RIGHT * 1.4 + UP * 1.2
-
-        p3 = LEFT * 0.1 + DOWN * 0.4
-        p4 = RIGHT * 2.0 + DOWN * 0.4
-
-        p_left = RIGHT * 1.1 + DOWN * 1.8
-        p_right = RIGHT * 3.0 + DOWN * 1.8
-
-        # Węzły wewnętrzne
-        root = tree_node(12, p12)
-        n7 = tree_node(7, p7)
-        n4 = tree_node(4, p4)
-
-        # Liście
-        leaf5 = tree_node("↑ (5)", p5, leaf=True)
-        leaf3 = tree_node("↓ (3)", p3, leaf=True)
-        leaf2a = tree_node("← (2)", p_left, leaf=True)
-        leaf2b = tree_node("→ (2)", p_right, leaf=True)
-
-        # Krawędzie drzewa
-        edges = VGroup(
-            connection(
-                p12 + DOWN * 0.38,
-                p5 + UP * 0.42,
-                "L = 0",
-                LEFT * 2.3 + UP * 2.0
-            ),
-            connection(
-                p12 + DOWN * 0.38,
-                p7 + UP * 0.38,
-                "R = 1",
-                RIGHT * 0.3 + UP * 2.0
-            ),
-            connection(
-                p7 + DOWN * 0.38,
-                p3 + UP * 0.42,
-                "L = 0",
-                LEFT * 0.5 + UP * 0.35
-            ),
-            connection(
-                p7 + DOWN * 0.38,
-                p4 + UP * 0.38,
-                "R = 1",
-                RIGHT * 2.0 + UP * 0.35
-            ),
-            connection(
-                p4 + DOWN * 0.38,
-                p_left + UP * 0.42,
-                "L = 0",
-                RIGHT * 0.7 + DOWN * 0.8
-            ),
-            connection(
-                p4 + DOWN * 0.38,
-                p_right + UP * 0.42,
-                "R = 1",
-                RIGHT * 3.1 + DOWN * 0.8
+            # Najpierw koło i krawędzie, potem powolne pojawienie się strzałek w środku
+            self.play(
+                GrowFromCenter(parent_circle),
+                FadeIn(parent_freq_txt, shift=UP * 0.12),
+                Create(left_edge),
+                Create(right_edge),
+                run_time=1.0,
             )
-        )
+            self.play(
+                LaggedStart(
+                    *[FadeIn(s, scale=0.8, rate_func=smooth) for s in parent_sym_list],
+                    lag_ratio=0.35,
+                ),
+                run_time=1.4,
+            )
+            self.wait(0.7)
 
-        # Animowane rysowanie drzewa
-        self.play(Create(root), run_time=1)
+            merged_tree = {
+                "symbols": parent_symbols,
+                "freq": parent_freq,
+                "node": parent_node,
+                "circle": parent_circle,
+                "left": left_tree,
+                "right": right_tree,
+                "left_edge": left_edge,
+                "right_edge": right_edge,
+            }
+            forest = [merged_tree] + remaining_trees
+
+        root_tree = forest[0]
+
+        # ==========================================
+        # ETAP 6 – Etykiety 0/1 na krawędziach i wyznaczanie kodów
+        # ==========================================
+        edge_labels = VGroup()
+
+        def attach_bit_labels(tree):
+            if tree["left"] is not None:
+                edge = tree["left_edge"]
+                vec = edge.get_end() - edge.get_start()
+                dx, dy = vec[0], vec[1]
+                perp = np.array([dy, -dx, 0.0]) / np.linalg.norm(vec)
+                lbl = Text("0", font_size=22, color=TEAL_A, weight=BOLD)
+                lbl.set_stroke(color=BLACK, width=4, background=True)
+                lbl.move_to(edge.get_center() + perp * 0.26)
+                lbl.set_z_index(4)
+                tree["left_bit_label"] = lbl
+                edge_labels.add(lbl)
+                attach_bit_labels(tree["left"])
+
+            if tree["right"] is not None:
+                edge = tree["right_edge"]
+                vec = edge.get_end() - edge.get_start()
+                dx, dy = vec[0], vec[1]
+                perp = np.array([-dy, dx, 0.0]) / np.linalg.norm(vec)
+                lbl = Text("1", font_size=22, color=YELLOW_B, weight=BOLD)
+                lbl.set_stroke(color=BLACK, width=4, background=True)
+                lbl.move_to(edge.get_center() + perp * 0.26)
+                lbl.set_z_index(4)
+                tree["right_bit_label"] = lbl
+                edge_labels.add(lbl)
+                attach_bit_labels(tree["right"])
+
+        attach_bit_labels(root_tree)
 
         self.play(
-            Create(edges[0]),
-            Create(edges[1]),
-            FadeIn(leaf5),
-            FadeIn(n7),
-            run_time=2
+            LaggedStart(*[FadeIn(lbl, scale=1.2) for lbl in edge_labels], lag_ratio=0.08),
+            run_time=1.3,
+        )
+        self.wait(0.6)
+
+        # Panel z kodami binarnymi po prawej stronie
+        panel_x = 4.9
+        title = Text("Kody Huffmana", font_size=30, color=BLUE_B, weight=BOLD)
+        title.move_to(np.array([panel_x, 2.65, 0.0]))
+        underline = Line(
+            np.array([panel_x - 1.5, 2.35, 0.0]),
+            np.array([panel_x + 1.5, 2.35, 0.0]),
+            color=BLUE_B,
+            stroke_width=2,
         )
 
-        self.play(
-            Create(edges[2]),
-            Create(edges[3]),
-            FadeIn(leaf3),
-            FadeIn(n4),
-            run_time=2
-        )
+        self.play(Write(title), Create(underline), run_time=1.0)
 
-        self.play(
-            Create(edges[4]),
-            Create(edges[5]),
-            FadeIn(leaf2a),
-            FadeIn(leaf2b),
-            run_time=2
-        )
+        def find_path(tree, target_sym):
+            if tree["left"] is None and tree["right"] is None:
+                return [] if tree["symbols"] == [target_sym] else None
+            if tree["left"] is not None:
+                sub = find_path(tree["left"], target_sym)
+                if sub is not None:
+                    return [("0", tree["left_edge"], tree["left_bit_label"], tree["left"])] + sub
+            if tree["right"] is not None:
+                sub = find_path(tree["right"], target_sym)
+                if sub is not None:
+                    return [("1", tree["right_edge"], tree["right_bit_label"], tree["right"])] + sub
+            return None
+
+        row_ys = [1.65, 0.80, -0.05, -0.90]
+        symbols_to_trace = ["↑", "↓", "←", "→"]
+
+        for row_idx, sym in enumerate(symbols_to_trace):
+            y = row_ys[row_idx]
+            sym_lbl = Text(sym, font_size=32, color=GOLD, weight=BOLD)
+            sym_lbl.move_to(np.array([panel_x - 1.05, y, 0.0]))
+            colon_lbl = Text(":", font_size=30, color=WHITE, weight=BOLD)
+            colon_lbl.move_to(np.array([panel_x - 0.55, y, 0.0]))
+
+            self.play(
+                FadeIn(sym_lbl, scale=0.8, rate_func=smooth),
+                FadeIn(colon_lbl, rate_func=smooth),
+                root_tree["circle"].animate.set_stroke(GOLD, width=4.5),
+                run_time=1.2,
+            )
+
+            path = find_path(root_tree, sym)
+            highlighted_edges = []
+            highlighted_circles = [root_tree["circle"]]
+            bit_mobs = []
+
+            for step_i, (bit_char, edge, bit_lbl, child_tree) in enumerate(path):
+                bit_color = TEAL_A if bit_char == "0" else YELLOW_B
+                code_bit = Text(bit_char, font_size=32, color=bit_color, weight=BOLD)
+                code_bit.move_to(np.array([panel_x - 0.1 + step_i * 0.34, y, 0.0]))
+                bit_mobs.append(code_bit)
+
+                highlighted_edges.append(edge)
+                highlighted_circles.append(child_tree["circle"])
+
+                self.play(
+                    edge.animate.set_color(GOLD).set_stroke(width=5.5),
+                    Indicate(bit_lbl, color=GOLD, scale_factor=1.35),
+                    child_tree["circle"].animate.set_stroke(GOLD, width=4.5),
+                    FadeIn(code_bit, shift=LEFT * 0.15),
+                    run_time=0.75,
+                )
+
+            leaf_circle = highlighted_circles[-1]
+            self.play(Indicate(leaf_circle, color=GOLD, scale_factor=1.12), run_time=0.5)
+
+            self.play(
+                sym_lbl.animate.set_color(WHITE),
+                *[e.animate.set_color(EDGE_COLOR).set_stroke(width=2.5) for e in highlighted_edges],
+                *[c.animate.set_stroke(BORDER_BLUE, width=3.0) for c in highlighted_circles],
+                run_time=0.45,
+            )
 
         self.wait(3)
-
-        # ==========================================
-        # ETAP 8 – Kody binarne
-        # ==========================================
-
-        self.play(
-            FadeOut(edges),
-            FadeOut(root),
-            FadeOut(n7),
-            FadeOut(n4),
-            FadeOut(leaf5),
-            FadeOut(leaf3),
-            FadeOut(leaf2a),
-            FadeOut(leaf2b)
-        )
-
-        title = Text(
-            "Kody Huffmana",
-            font_size=42,
-            color=WHITE
-        )
-        title.to_edge(UP)
-
-        results = VGroup(
-            Text("↑     0", font_size=38),
-            Text("↓     10", font_size=38),
-            Text("←     110", font_size=38),
-            Text("→     111", font_size=38)
-        )
-
-        results.arrange(
-            DOWN,
-            aligned_edge=LEFT,
-            buff=0.4
-        )
-
-        self.play(Write(title))
-
-        for result in results:
-            self.play(Write(result), run_time=1)
-
-        self.wait(4)
-
-        self.play(
-            FadeOut(title),
-            FadeOut(results)
-        )
