@@ -6,3 +6,7 @@ założenia projektu:
 Cel projektu:
 1. Możliwość skompresowania za pomocą algorytmu Huffmana dowolnego pliku tekstowego obsługiwanego przez C++ bez dodatkowych bibliotek (nw czy to jest ascii czy utf-8 sprawdzę później i poprawię)
 2. Z punktu 1 wynika że program ma zarówno czytać jak i zapisywać pliki 
+
+
+Komenda do renderowania wizualizacji:
+manim -pqh visualization.py HuffmanAnimation
